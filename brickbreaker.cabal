@@ -1,14 +1,30 @@
-cabal-version: 3.0
-name: brickbreaker
-version: 0.1.0.0
+cabal-version: >=1.10
+name:                BrickBreaker
+version:             0.1.0.0
+build-type:          Simple
 
-common common
-  ghc-options: -Wall
-  build-depends: base
-  default-language: Haskell2010
+library game-lib
+    hs-source-dirs:      app
+    exposed-modules:     Game
+    build-depends:       base >=4.7 && <5,
+                         gloss,
+                         HUnit
+    default-language:    Haskell2010
 
-executable brickbreaker
-  import: common
-  main-is: brickbreaker.hs
-  build-depends: gloss
+executable brickbreaker-exe
+    main-is:             Game.hs
+    hs-source-dirs:      app
+    build-depends:       base >=4.7 && <5,
+                         gloss
+    default-language:    Haskell2010
 
+test-suite brickbreaker-tests
+    type:              exitcode-stdio-1.0
+    main-is:           GameTests.hs
+    hs-source-dirs:    test
+    build-depends:     base >=4.7 && <5,
+                       gloss,
+                       HUnit,
+                       game-lib,
+                       hspec
+    default-language:  Haskell2010
