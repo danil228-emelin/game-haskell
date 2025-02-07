@@ -3,7 +3,6 @@
 import Graphics.Gloss
 import Graphics.Gloss.Interface.IO.Interact
 
--- Scaling factor
 scaleFactor :: Float
 scaleFactor = 20
 
@@ -78,3 +77,9 @@ updateGame elapsedTime (paddlePos, (ballX, ballY), (vX, vY), brickPositions, sco
                        | ballX < -10 || ballX > 10 = (-abs vX * signum ballX,vY)
                        | ballY > 10 || brickPositions /= updatedBricks = (vX, -abs vY)
                        | True = (vX,vY)
+
+
+-- interface to choose level of game
+-- push up,when break breek
+-- new simple game
+-- tests
