@@ -1,6 +1,6 @@
 #!/usr/bin/env -S stack script --compile --resolver lts-20.13 --package gloss
 
-module Game where   
+module Main where   
 import Graphics.Gloss
 import Graphics.Gloss.Interface.IO.Interact
 
@@ -9,14 +9,14 @@ scaleFactor = 20
 
 type Position = (Float, Float)  -- Represents a position in 2D space
 type Velocity = (Float, Float)  -- Represents velocity in 2D space
--- Game state: paddle position, ball position, ball velocity, brick positions, score, difficulty
-type GameState = (Float, Position, Velocity, [Position], Int, String)
+-- Game state: paddle position, ball position, ball velocity, brick positions, score, difficulty, lives
+type GameState = (Float, Position, Velocity, [Position], Int, String, Int)
 
 main :: IO ()
 main = play FullScreen  -- Display mode 
             white -- Background color
             60   -- Frames per second
-            (0, (-10, -20), (8, 16), (,) <$> [-10.9, -8.9 .. 9.1] <*> [2, 4 .. 8], 0, "Normal")  -- Initial game state
+            (0, (-10, -20), (8, 16), (,) <$> [-10.9, -8.9 .. 9.1] <*> [2, 4 .. 8], 0, "Normal", 3)  -- Initial game state
             renderGame -- Render function
             handleInput -- Input handler function
             updateGame -- Update function
@@ -39,11 +39,11 @@ getSpeed _        = 1.0  -- Default case
 
 -- Render function
 renderGame :: GameState -> Picture
-renderGame (paddlePos, (ballX, ballY), _, brickPositions, score, difficulty) = 
+renderGame (paddlePos, (ballX, ballY), (xV,yV), brickPositions, score, difficulty, lives) = 
   let
     -- Create overlays as Pictures
-    loseOverlay  = if ballY < -20 then color red (rectangleSolid 100 100) else mempty
-    winOverlay   = if null brickPositions then color green (rectangleSolid 100 100) else mempty
+    loseOverlay  = if ballY < -20 || lives <1 then color red (rectangleSolid 100 100) else mempty
+    winOverlay   = if null brickPositions && lives>0  then color green (rectangleSolid 100 100) else mempty
 
     -- Draw game elements
     lastLine     = line (createSquare 22 (-11, -11))
@@ -51,30 +51,32 @@ renderGame (paddlePos, (ballX, ballY), _, brickPositions, score, difficulty) =
     ball         = translate ballX ballY (circle 1)
     bricks       = foldMap (polygon . createSquare 1.8) brickPositions
 
-    -- Render the score and difficulty
+    -- Render the score, difficulty, and lives
     scoreText    = translate 5 17 (scale 0.01 0.01 (text ("Score: " ++ show score)))
-    difficultyText    = translate 5 15 (scale 0.01 0.01 (text ("Difficulty: " ++ difficulty)))
+    difficultyText = translate 5 15 (scale 0.01 0.01 (text ("Difficulty: " ++ difficulty)))
+    livesText    = translate 5 13 (scale 0.01 0.01 (text ("Lives: " ++ show lives)))  -- Display lives
 
   in
-    scale scaleFactor scaleFactor $ loseOverlay <> winOverlay <> lastLine <> paddleLine <> ball <> bricks <> scoreText <> difficultyText
+    scale scaleFactor scaleFactor $ loseOverlay <> winOverlay <> lastLine <> paddleLine <> ball <> bricks <> scoreText <> difficultyText <> livesText
 
 -- Input handler function
 handleInput :: Event -> GameState -> GameState
-handleInput (EventKey (Char 'e') Down _ _) (_, ballPos, ballVel, brickPositions, score, _) = (0, ballPos, ballVel, brickPositions, score, "Easy")
-handleInput (EventKey (Char 'n') Down _ _) (_, ballPos, ballVel, brickPositions, score, _) = (0, ballPos, ballVel, brickPositions, score, "Normal")
-handleInput (EventKey (Char 'h') Down _ _) (_, ballPos, ballVel, brickPositions, score, _) = (0, ballPos, ballVel, brickPositions, score, "Hard")
-handleInput (EventMotion (paddleX, _)) (_, ballPos, ballVel, brickPositions, score, difficulty) = (paddleX / scaleFactor, ballPos, ballVel, brickPositions, score, difficulty)
+handleInput (EventKey (Char 'e') Down _ _) (_, ballPos, ballVel, brickPositions, score, _, lives) = (0, ballPos, ballVel, brickPositions, score, "Easy", lives)
+handleInput (EventKey (Char 'n') Down _ _) (_, ballPos, ballVel, brickPositions, score, _, lives) = (0, ballPos, ballVel, brickPositions, score, "Normal", lives)
+handleInput (EventKey (Char 'h') Down _ _) (_, ballPos, ballVel, brickPositions, score, _, lives) = (0, ballPos, ballVel, brickPositions, score, "Hard", lives)
+handleInput (EventMotion (paddleX, _)) (_, ballPos, ballVel, brickPositions, score, difficulty, lives) = (paddleX / scaleFactor, ballPos, ballVel, brickPositions, score, difficulty, lives)
 handleInput _ currentState = currentState
 
 -- Update function
 updateGame :: Float -> GameState -> GameState
--- t: elapsed time
--- paddlePos: Paddle position.
--- (ballX, ballY): Ball position.
--- (vX, vY): Ball velocity.
--- brickPositions: List of bricks
-updateGame elapsedTime (paddlePos, (ballX, ballY), (vX, vY), brickPositions, score, difficulty) = 
-    (paddlePos, (newBallX, newBallY), (newVelX, newVelY), updatedBricks, newScore, difficulty)
+updateGame elapsedTime (paddlePos, (ballX, ballY), (vX, vY), brickPositions, score, difficulty, lives) =
+    if ballY < -20 then  -- Check if the ball has fallen below the paddle
+        if lives > 1 then  -- Check if the player has lives left
+            (0, (0, -20), (8, 16), brickPositions, score, difficulty, lives - 1)  -- Reset ball and reduce lives
+        else
+            (0, (0, -20), (0, 0), brickPositions, 0, "Normal", 0)  -- Reset game if no lives left
+    else
+        (paddlePos, (newBallX, newBallY), (newVelX, newVelY), updatedBricks, newScore, difficulty, lives)
   where 
     -- Calculate new ball position based on difficulty speed
     speedMultiplier = getSpeed difficulty
@@ -92,3 +94,4 @@ updateGame elapsedTime (paddlePos, (ballX, ballY), (vX, vY), brickPositions, sco
                        | ballX < -10 || ballX > 10 = (-abs vX * signum ballX, vY)
                        | ballY > 10 || brickPositions /= updatedBricks = (vX, -abs vY)
                        | True = (vX, vY)
+

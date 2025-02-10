@@ -5,14 +5,14 @@ build-type:          Simple
 
 library game-lib
     hs-source-dirs:      app
-    exposed-modules:     Game
+    exposed-modules:     Main
     build-depends:       base >=4.7 && <5,
                          gloss,
                          HUnit
     default-language:    Haskell2010
 
 executable brickbreaker-exe
-    main-is:             Game.hs
+    main-is:             Main.hs
     hs-source-dirs:      app
     build-depends:       base >=4.7 && <5,
                          gloss
