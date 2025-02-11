@@ -10,7 +10,8 @@ scaleFactor = 20
 type Position = (Float, Float)  -- Represents a position in 2D space
 type Velocity = (Float, Float)  -- Represents velocity in 2D space
 
-data GameMode = Playing | StartScreen | EndScreen deriving Eq 
+data GameMode = Playing | StartScreen | EndScreen | Quit deriving Eq
+
 
 data GameState = GameState
     { paddlePos   :: Float
@@ -94,6 +95,7 @@ renderGame (GameState paddlePos ballPos ballVel brickPositions score difficulty 
 handleInput :: Event -> GameState -> GameState
 handleInput (EventKey (Char 's') Down _ _) state = state { mode = Playing }  -- Start the game
 handleInput (EventKey (Char 'r') Down _ _) state = initialGameState
+handleInput (EventKey (Char 'q') Down _ _) state = error "Game Quit"
 handleInput (EventKey (Char 'e') Down _ _) state = state { difficulty = "Easy" }
 handleInput (EventKey (Char 'n') Down _ _) state = state { difficulty = "Normal" }
 handleInput (EventKey (Char 'h') Down _ _) state = state { difficulty = "Hard" }
