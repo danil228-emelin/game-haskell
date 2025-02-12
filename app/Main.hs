@@ -243,18 +243,16 @@ updateGame elapsedTime gameState@(GameState paddlePos ballPos ballVel brickPosit
                         (fst ballVel, snd ballVel)  -- No collision, keep current velocity
 
             in
+               
                 gameState {
                     ballPos = newBallPos, 
-                    ballVel = (newVelX, newVelY), 
-                    brickPositions = updatedBricks, 
-                    score = newScore, 
-                    lives = newLives, 
-                    mode = newMode, 
-                    boostActive = newBoostActive, 
-                    boostDuration = finalBoostDuration, 
-                    slowDownDuration = newSlowDownDuration
+                    ballVel = (newVelX, newVelY),
+                    lives = newLives,
+                    mode = newMode,
+                    brickPositions = updatedBricks,
+                    score = newScore,
+                    boostActive = newBoostActive,
+                    boostDuration = finalBoostDuration,
+                    slowDownDuration = newSlowDownDuration  -- Correctly update slowDownDuration
                 }
-
-        StartScreen -> gameState  -- No updates needed in StartScreen mode
-        EndScreen   -> gameState  -- No updates needed in EndScreen mode
-
+        _ -> gameState  -- If the mode is not Playing, return the current game state unchanged
