@@ -102,9 +102,6 @@ renderGame (GameState paddlePos ballPos ballVel brickPositions score difficulty 
 
 -- Render Playing Game State
 renderPlayingGame :: Float -> Position -> Velocity -> [Position] -> Int -> String -> Int -> Picture
-renderPlayingGame paddlePos ballPos ball
--- Render Playing Game State
-renderPlayingGame :: Float -> Position -> Velocity -> [Position] -> Int -> String -> Int -> Picture
 renderPlayingGame paddlePos ballPos ballVel brickPositions score difficulty lives =
     let
         -- Create overlays as Pictures
@@ -158,7 +155,7 @@ handleInput (EventKey (Char 'b') Down _ _) state = state { boostActive = False, 
 handleInput (EventMotion (paddleX, _)) state = if mode state == Playing 
                                                  then state { paddlePos = paddleX / scaleFactor } 
                                                  else state  -- Move paddle only if playing
-handleInput _ currentState = currentState  -- No changes for other events
+handleInput _ currentState = currentState
 
 -- Update the game state
 updateGame :: Float -> GameState -> GameState
@@ -182,9 +179,7 @@ updateGame elapsedTime gameState@(GameState paddlePos ballPos ballVel brickPosit
                     if snd ballPos < -20 
                     then if lives > 1 
                          then ((0, -20), (8, 16), lives - 1, Playing)  -- Deduct one life and reset the ball
-                         else ((0, -20), (0
-
-                         , 0), 0, EndScreen)  -- No lives left, transition to EndScreen
+                         else ((0, -20), (0, 0), 0, EndScreen)  -- No lives left, transition to EndScreen
                     else 
                         -- Ball is still in play, update its position and velocity
                         let
@@ -233,24 +228,33 @@ updateGame elapsedTime gameState@(GameState paddlePos ballPos ballVel brickPosit
                 newSlowDownDuration = if newBoostActive then 3.0 else updatedSlowDownDuration
 
                 -- Bounce on paddle, adjust horizontal velocity
-                (newVelX, newVelY) | snd newBallPos < -10 && snd newBallPos > -11 && fst newBallPos > paddlePos - 2 && fst newBallPos < paddlePos + 2 = 
-                    ((fst newBallPos - paddlePos) * 10, abs (snd ballVel))
-                | fst newBallPos < -10 || fst newBallPos > 10 = 
-                    (-abs (fst ballVel) * signum (fst newBallPos), snd ballVel)  -- Bounce on left and right walls
-                | snd newBallPos > 10 || brickPositions /= updatedBricks = 
-                    (fst ballVel, -abs (snd ballVel))  -- Bounce off the top or hit a brick
-                | otherwise = 
-                    (fst ballVel, snd ballVel)  -- No change in velocity
+                (newVelX, newVelY) = 
+                    if snd newBallPos < -10 && snd newBallPos > -11 && 
+                       fst newBallPos > paddlePos - 2 && fst newBallPos < paddlePos + 2 
+                    then 
+                        ((fst newBallPos - paddlePos) * 10, abs (snd ballVel))
+                    else if fst newBallPos < -10 || fst newBallPos > 10 
+                    then 
+                        (-abs (fst ballVel) * signum (fst newBallPos), snd ballVel)  -- Bounce on left and right walls
+                    else if snd newBallPos > 10 || brickPositions /= updatedBricks 
+                    then 
+                        (fst ballVel, -abs (snd ballVel))  -- Bounce off the top or hit a brick
+                    else 
+                        (fst ballVel, snd ballVel)  -- No collision, keep current velocity
 
             in
-                gameState { ballPos = newBallPos, 
-                            ballVel = (newVelX, newVelY), 
-                            brickPositions = updatedBricks, 
-                            score = newScore, 
-                            lives = newLives, 
-                            mode = newMode, 
-                            boostActive = newBoostActive, 
-                            boostDuration = finalBoostDuration, 
-                            slowDownDuration = newSlowDownDuration }
+                gameState {
+                    ballPos = newBallPos, 
+                    ballVel = (newVelX, newVelY), 
+                    brickPositions = updatedBricks, 
+                    score = newScore, 
+                    lives = newLives, 
+                    mode = newMode, 
+                    boostActive = newBoostActive, 
+                    boostDuration = finalBoostDuration, 
+                    slowDownDuration = newSlowDownDuration
+                }
+
         StartScreen -> gameState  -- No updates needed in StartScreen mode
         EndScreen   -> gameState  -- No updates needed in EndScreen mode
+
