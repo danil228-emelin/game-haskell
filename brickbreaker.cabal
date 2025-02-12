@@ -5,17 +5,20 @@ build-type:          Simple
 
 library game-lib
     hs-source-dirs:      app
-    exposed-modules:     Main
+    exposed-modules:     GameLogic
+    other-modules:       Main
     build-depends:       base >=4.7 && <5,
                          gloss,
-                         HUnit
+                         HUnit,
+                         QuickCheck
     default-language:    Haskell2010
 
 executable brickbreaker-exe
     main-is:             Main.hs
     hs-source-dirs:      app
     build-depends:       base >=4.7 && <5,
-                         gloss
+                         gloss,
+                         game-lib
     default-language:    Haskell2010
 
 test-suite brickbreaker-tests
@@ -25,6 +28,6 @@ test-suite brickbreaker-tests
     build-depends:     base >=4.7 && <5,
                        gloss,
                        HUnit,
-                       game-lib,
-                       hspec
+                       QuickCheck,
+                       game-lib
     default-language:  Haskell2010
