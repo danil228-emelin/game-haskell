@@ -12,7 +12,6 @@ type Velocity = (Float, Float)  -- Represents velocity in 2D space
 
 data GameMode = Playing | StartScreen | EndScreen | Quit deriving Eq
 
-
 -- Update GameState to include slowDownDuration
 data GameState = GameState {
     paddlePos :: Float,
@@ -34,7 +33,7 @@ initialGameState = GameState
     0 
     (-10, -20) 
     (8, 16) 
-    ([(x, y) | x <- [-10.9, -8.9 .. 9.1], y <- [2, 4 .. 8]] ++ [(0, 5)]) 
+    ([(x, y) | x <- [-10.9, -8.9 .. 9.1], y <- [2, 4 .. 8]] ++ [(0, 5), (5, 6)])  -- Added red brick at (0, 4)
     0 
     "Normal" 
     3 
@@ -42,8 +41,6 @@ initialGameState = GameState
     False 
     0
     0  -- Initialize slowDownDuration to 0
-
-
 
 -- Render the start screen
 renderStartScreen :: Picture
@@ -80,7 +77,6 @@ getSpeed "Normal" = 1.0
 getSpeed "Hard"   = 1.5
 getSpeed _        = 1.0  -- Default case
 
-
 -- Function to create a colored square shape
 createSquare :: Float -> (Float, Float) -> Color -> Picture
 createSquare length corner colorValue = color colorValue $ polygon (createSquarePath length corner)
@@ -91,7 +87,7 @@ createSquarePath length (x, y) = [(x, y), (x + length, y), (x + length, y + leng
 
 -- Render function
 renderGame :: GameState -> Picture
-renderGame (GameState paddlePos ballPos ballVel brickPositions score difficulty lives mode boostActive boostDuration time) = 
+renderGame (GameState paddlePos ballPos ballVel brickPositions score difficulty lives mode boostActive boostDuration slowDownDuration) = 
     case mode of
         StartScreen -> renderStartScreen  -- Render the start screen
         EndScreen   -> renderEndScreen score  -- Render the end screen with the score
@@ -107,7 +103,7 @@ renderGame (GameState paddlePos ballPos ballVel brickPositions score difficulty 
                 ball         = translate (fst ballPos) (snd ballPos) (circle 1)
 
                 -- Render bricks with appropriate colors
-                bricks       = foldMap (\pos -> createSquare 1.8 pos (if isGreenBrick pos then green else blue)) brickPositions
+                bricks       = foldMap (\pos -> createSquare 1.8 pos (if isGreenBrick pos then green else if isRedBrick pos then red else blue)) brickPositions
 
                 -- Render the score, difficulty, and lives
                 scoreText    = translate 5 17 (scale 0.01 0.01 (text ("Score: " ++ show score)))
@@ -121,6 +117,10 @@ renderGame (GameState paddlePos ballPos ballVel brickPositions score difficulty 
 isGreenBrick :: Position -> Bool
 isGreenBrick (x, y) = (x, y) == (0, 5)  -- Position of the green brick
 
+-- Function to check if a brick is red
+isRedBrick :: Position -> Bool
+isRedBrick (x, y) = (x, y) == (5, 6)  -- Position of the red brick
+
 handleInput :: Event -> GameState -> GameState
 handleInput (EventKey (Char 's') Down _ _) state = state { mode = Playing }  -- Start the game
 handleInput (EventKey (Char 'r') Down _ _) state = initialGameState
@@ -131,7 +131,6 @@ handleInput (EventKey (Char 'h') Down _ _) state = state { difficulty = "Hard" }
 handleInput (EventKey (Char 'b') Down _ _) state = state { boostActive = False, boostDuration = 0, slowDownDuration = 0 }  -- Turn off all boosts
 handleInput (EventMotion (paddleX, _)) state = if mode state == Playing then state { paddlePos = paddleX / scaleFactor } else state  -- Only move paddle if playing
 handleInput _ currentState = currentState
-
 
 updateGame :: Float -> GameState -> GameState
 updateGame elapsedTime gameState@(GameState paddlePos ballPos ballVel brickPositions score difficulty lives mode boostActive boostDuration slowDownDuration) =
@@ -163,13 +162,29 @@ updateGame elapsedTime gameState@(GameState paddlePos ballPos ballVel brickPosit
                         in
                             ((newBallX, newBallY), ballVel, lives, Playing)
 
-                -- Filter out the bricks that have been hit by the ball
-                updatedBricks = filter (\(brickX, brickY) -> brickX > fst newBallPos || brickX + 2 < fst newBallPos || brickY > snd newBallPos || brickY + 2 < snd newBallPos) brickPositions
+                               -- Filter out the bricks that have been hit by the ball
+                updatedBricks = filter (\(brickX, brickY) -> 
+                    brickX > fst newBallPos || 
+                    brickX + 2 < fst newBallPos || 
+                    brickY > snd newBallPos || 
+                    brickY + 2 < snd newBallPos) brickPositions
                 
                 newScore = if brickPositions /= updatedBricks then score + 1 else score  -- Increase score when a brick is hit
 
-                -- Check for collisions with the green block and activate boost
-                newBoostActive = any (\(brickX, brickY) -> brickX <= fst newBallPos && fst newBallPos <= brickX + 2 && brickY <= snd newBallPos && snd newBallPos <= brickY + 2) (filter isGreenBrick brickPositions)
+                -- Check for collisions with green and red bricks
+                newBoostActive = any (\(brickX, brickY) -> 
+                    brickX <= fst newBallPos && 
+                    fst newBallPos <= brickX + 2 && 
+                    brickY <= snd newBallPos && 
+                    snd newBallPos <= brickY + 2) 
+                    (filter isGreenBrick brickPositions)
+
+                newSpeedUpActive = any (\(brickX, brickY) -> 
+                    brickX <= fst newBallPos && 
+                    fst newBallPos <= brickX + 2 && 
+                    brickY <= snd newBallPos && 
+                    snd newBallPos <= brickY + 2) 
+                    (filter isRedBrick brickPositions)
 
                 -- Update boost duration if the boost is activated
                 finalBoostDuration = if newBoostActive then 3.0 else updatedBoostDuration  -- Set boost duration to 3 seconds
@@ -177,8 +192,12 @@ updateGame elapsedTime gameState@(GameState paddlePos ballPos ballVel brickPosit
                 -- Set slow down duration if the green block is hit
                 newSlowDownDuration = if newBoostActive then 3.0 else updatedSlowDownDuration
 
+                -- Increase speed if the red brick is hit
+                speedMultiplier = getSpeed difficulty * (if isBoostActive then 0.5 else 1.0) * (if updatedSlowDownDuration > 0 then 0.5 else 1.0) * (if newSpeedUpActive then 1.5 else 1.0)
+
                 -- Bounce on paddle, adjust horizontal velocity
-                (newVelX, newVelY) | snd newBallPos < -10 && snd newBallPos > -11 && fst newBallPos > paddlePos - 2 && fst newBallPos < paddlePos + 2 = ((fst newBallPos - paddlePos) * 10, abs (snd newBallVel))
+                (newVelX, newVelY) | snd newBallPos < -10 && snd newBallPos > -11 && fst newBallPos > paddlePos - 2 && fst newBallPos < paddlePos + 2 = 
+                    ((fst newBallPos - paddlePos) * 10, abs (snd newBallVel))
                                    -- Bounce on left and right walls
                                    | fst newBallPos < -10 || fst newBallPos > 10 = (-abs (fst newBallVel) * signum (fst newBallPos), snd newBallVel)
                                    | snd newBallPos > 10 || brickPositions /= updatedBricks = (fst newBallVel, -abs (snd newBallVel))
@@ -188,3 +207,4 @@ updateGame elapsedTime gameState@(GameState paddlePos ballPos ballVel brickPosit
                 gameState { ballPos = newBallPos, ballVel = (newVelX, newVelY), brickPositions = updatedBricks, score = newScore, lives = newLives, mode = newMode, boostActive = newBoostActive, boostDuration = finalBoostDuration, slowDownDuration = newSlowDownDuration }
         StartScreen -> gameState  -- No updates needed in StartScreen mode
         EndScreen   -> gameState  -- No updates needed in EndScreen mode
+
