@@ -13,7 +13,7 @@ type Velocity = (Float, Float)  -- Represents velocity in 2D space
 data GameMode = Playing | StartScreen | EndScreen | Quit deriving Eq
 
 
--- Assuming the following definition for GameState
+-- Update GameState to include slowDownDuration
 data GameState = GameState {
     paddlePos :: Float,
     ballPos :: (Float, Float),
@@ -24,7 +24,8 @@ data GameState = GameState {
     lives :: Int,
     mode :: GameMode,
     boostActive :: Bool,
-    boostDuration :: Float
+    boostDuration :: Float,
+    slowDownDuration :: Float  -- New field to track slowdown duration
 }
 
 -- Initial game state
@@ -33,13 +34,14 @@ initialGameState = GameState
     0 
     (-10, -20) 
     (8, 16) 
-    ([(x, y) | x <- [-10.9, -8.9 .. 9.1], y <- [2, 4 .. 8]] ++ [(0, 5)])  -- Concatenate the list here
+    ([(x, y) | x <- [-10.9, -8.9 .. 9.1], y <- [2, 4 .. 8]] ++ [(0, 5)]) 
     0 
     "Normal" 
     3 
     StartScreen 
     False 
     0
+    0  -- Initialize slowDownDuration to 0
 
 
 
@@ -89,7 +91,7 @@ createSquarePath length (x, y) = [(x, y), (x + length, y), (x + length, y + leng
 
 -- Render function
 renderGame :: GameState -> Picture
-renderGame (GameState paddlePos ballPos ballVel brickPositions score difficulty lives mode boostActive boostDuration) = 
+renderGame (GameState paddlePos ballPos ballVel brickPositions score difficulty lives mode boostActive boostDuration time) = 
     case mode of
         StartScreen -> renderStartScreen  -- Render the start screen
         EndScreen   -> renderEndScreen score  -- Render the end screen with the score
@@ -126,15 +128,19 @@ handleInput (EventKey (Char 'q') Down _ _) state = error "Game Quit"
 handleInput (EventKey (Char 'e') Down _ _) state = state { difficulty = "Easy" }
 handleInput (EventKey (Char 'n') Down _ _) state = state { difficulty = "Normal" }
 handleInput (EventKey (Char 'h') Down _ _) state = state { difficulty = "Hard" }
+handleInput (EventKey (Char 'b') Down _ _) state = state { boostActive = False, boostDuration = 0, slowDownDuration = 0 }  -- Turn off all boosts
 handleInput (EventMotion (paddleX, _)) state = if mode state == Playing then state { paddlePos = paddleX / scaleFactor } else state  -- Only move paddle if playing
 handleInput _ currentState = currentState
 
 
 updateGame :: Float -> GameState -> GameState
-updateGame elapsedTime gameState@(GameState paddlePos ballPos ballVel brickPositions score difficulty lives mode boostActive boostDuration) =
+updateGame elapsedTime gameState@(GameState paddlePos ballPos ballVel brickPositions score difficulty lives mode boostActive boostDuration slowDownDuration) =
     case mode of
         Playing -> 
             let
+                -- Update the slowdown duration
+                updatedSlowDownDuration = if slowDownDuration > 0 then slowDownDuration - elapsedTime else 0
+
                 -- Check for boost duration
                 updatedBoostDuration = if boostActive then boostDuration - elapsedTime else boostDuration
                 isBoostActive = updatedBoostDuration > 0
@@ -142,14 +148,14 @@ updateGame elapsedTime gameState@(GameState paddlePos ballPos ballVel brickPosit
                 -- Check if the ball has fallen below the paddle
                 newGameState = if snd ballPos < -20 then 
                     if lives > 1 then 
-                        gameState { paddlePos = 0, ballPos = (0, -20), ballVel = (8, 16), lives = lives - 1, boostActive = False, boostDuration = 0 } 
+                        gameState { paddlePos = 0, ballPos = (0, -20), ballVel = (8, 16), lives = lives - 1, boostActive = False, boostDuration = 0, slowDownDuration = 0 } 
                     else 
-                        gameState { paddlePos = 0, ballPos = (0, -20), ballVel = (0, 0), score = 0, difficulty = "Normal", lives = 0, mode = EndScreen, boostActive = False, boostDuration = 0 }
+                        gameState { paddlePos = 0, ballPos = (0, -20), ballVel = (0, 0), score = 0, difficulty = "Normal", lives = 0, mode = EndScreen, boostActive = False, boostDuration = 0, slowDownDuration = 0 }
                 else 
                     gameState
 
                 -- Calculate new ball position based on speed and boost
-                speedMultiplier = getSpeed difficulty * (if isBoostActive then 0.5 else 1.0) -- Slow down the ball if boost is active
+                speedMultiplier = getSpeed difficulty * (if isBoostActive then 0.5 else 1.0) * (if updatedSlowDownDuration > 0 then 0.5 else 1.0) -- Slow down the ball if boost is active or slow down duration is active
                 newBallX = fst ballPos + fst ballVel * elapsedTime * speedMultiplier
                 newBallY = snd ballPos + snd ballVel * elapsedTime * speedMultiplier
 
@@ -164,6 +170,9 @@ updateGame elapsedTime gameState@(GameState paddlePos ballPos ballVel brickPosit
                 -- Update boost duration if the boost is activated
                 finalBoostDuration = if newBoostActive then 3.0 else updatedBoostDuration  -- Set boost duration to 3 seconds
 
+                -- Set slow down duration if the green block is hit
+                newSlowDownDuration = if newBoostActive then 3.0 else updatedSlowDownDuration
+
                 -- Bounce on paddle, adjust horizontal velocity
                 (newVelX, newVelY) | newBallY < -10 && newBallY > -11 && newBallX > paddlePos - 2 && newBallX < paddlePos + 2 = ((newBallX - paddlePos) * 10, abs (snd ballVel))
                                    -- Bounce on left and right walls
@@ -172,6 +181,6 @@ updateGame elapsedTime gameState@(GameState paddlePos ballPos ballVel brickPosit
                                    | True = (fst ballVel, snd ballVel)
 
             in
-                newGameState { ballPos = (newBallX, newBallY), ballVel = (newVelX, newVelY), brickPositions = updatedBricks, score = newScore, boostActive = newBoostActive, boostDuration = finalBoostDuration }
+                newGameState { ballPos = (newBallX, newBallY), ballVel = (newVelX, newVelY), brickPositions = updatedBricks, score = newScore, boostActive = newBoostActive, boostDuration = finalBoostDuration, slowDownDuration = newSlowDownDuration }
         StartScreen -> gameState  -- No updates needed in StartScreen mode
         EndScreen   -> gameState  -- No updates needed in EndScreen mode
