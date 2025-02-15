@@ -25,19 +25,13 @@
    cd brick-breaker
    
     Установите необходимые зависимости:
-    Если вы используете Cabal:
     cabal update
     cabal install
-    Или если вы используете Stack:
-
-    stack setup
-    stack build
-
 Запуск игры
 
 Чтобы запустить игру, выполните следующую команду:
 
-cabal run  # если используете Cabal
+cabal run
 ```
 
 ## Управление
