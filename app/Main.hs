@@ -1,16 +1,43 @@
-#!/usr/bin/env -S stack script --compile --resolver lts-20.13 --package gloss
+{-# LANGUAGE RecordWildCards #-}
 
 module Main where
 
+import GameLogic
 import Graphics.Gloss
 import Graphics.Gloss.Interface.IO.Interact
-import GameLogic
+
+data GameConfig = GameConfig
+  { displayMode :: Display,
+    backgroundColor :: Color,
+    frameRate :: Int,
+    initialState :: GameState,
+    renderGameState :: GameState -> Picture,
+    handleInputGame :: Event -> GameState -> GameState,
+    updateGameState :: Float -> GameState -> GameState
+  }
+
+defaultGameConfig :: GameConfig
+defaultGameConfig =
+  GameConfig
+    FullScreen
+    white
+    60
+    initialGameState
+    renderGame
+    handleInput
+    updateGame
 
 main :: IO ()
-main = play FullScreen  -- Display mode 
-            white       -- Background color
-            60          -- Frames per second
-            initialGameState
-            renderGame   -- Render function
-            handleInput  -- Input handler function
-            updateGame   -- Update function
+main = do
+  playGame defaultGameConfig
+
+playGame :: GameConfig -> IO ()
+playGame GameConfig {..} =
+  play
+    displayMode
+    backgroundColor
+    frameRate
+    initialState
+    renderGameState
+    handleInputGame
+    updateGameState
