@@ -163,7 +163,7 @@ updateGame elapsedTime gameState@(GameState paddlePos ballPos ballVel brickPosit
                     else 
                         -- Ball is still in play, update its position and velocity
                         let
-                            speedMultiplier = getSpeed difficulty * (if isBoostActive then 0.5 else 1.0) * (if updatedSlowDownDuration > 0 then 0.5 else 1.0)
+                            speedMultiplier = getSpeed difficulty * (if isBoostActive then 2 else 1.0) * (if updatedSlowDownDuration > 0 then 0.5 else 1.0)
                             newBallX = fst ballPos + fst ballVel * elapsedTime * speedMultiplier
                             newBallY = snd ballPos + snd ballVel * elapsedTime * speedMultiplier
                         in
