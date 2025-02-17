@@ -1,5 +1,4 @@
 {-# LANGUAGE NamedFieldPuns #-}
-{-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE RecordWildCards #-}
 
 module GameLogic where
@@ -80,31 +79,51 @@ renderGame gameState@GameState {..} =
     EndScreen -> renderEndScreen score
     Playing -> renderPlayingGame gameState
 
+data GameRendering = GameRendering
+  { loseOverlay :: Picture,
+    winOverlay :: Picture,
+    lastLine :: Picture,
+    paddleLine :: Picture,
+    ball :: Picture,
+    bricks :: Picture,
+    scoreText :: Picture,
+    difficultyText :: Picture,
+    livesText :: Picture
+  }
+
+combineRendering :: GameRendering -> Picture
+combineRendering GameRendering {..} =
+  loseOverlay
+    <> winOverlay
+    <> lastLine
+    <> paddleLine
+    <> ball
+    <> bricks
+    <> scoreText
+    <> difficultyText
+    <> livesText
+
 renderPlayingGame :: GameState -> Picture
 renderPlayingGame GameState {..} =
-  let loseOverlay
-        | fst ballPos < -20 || lives < 1 = color red (rectangleSolid 100 100)
-        | otherwise = mempty
-      winOverlay
-        | null brickPositions && lives > 0 = color green (rectangleSolid 100 100)
-        | otherwise = mempty
-      lastLine = line [(-11, -11), (11, -11)]
-      paddleLine = line [(paddlePos - 2, -10), (paddlePos + 2, -10)]
-      ball = translate (fst ballPos) (snd ballPos) (circle 1)
-      bricks = foldMap (\pos -> createSquare 1.8 pos (brickColor pos)) brickPositions
-      scoreText = translate 5 17 (scale 0.01 0.01 (text ("Score: " ++ show score)))
-      difficultyText = translate 5 15 (scale 0.01 0.01 (text ("Difficulty: " ++ difficulty)))
-      livesText = translate 5 13 (scale 0.01 0.01 (text ("Lives: " ++ show lives)))
-   in scale scaleFactor scaleFactor $
-        loseOverlay
-          <> winOverlay
-          <> lastLine
-          <> paddleLine
-          <> ball
-          <> bricks
-          <> scoreText
-          <> difficultyText
-          <> livesText
+  let rendering =
+        GameRendering
+          { loseOverlay =
+              if fst ballPos < -20 || lives < 1
+                then color red (rectangleSolid 100 100)
+                else mempty,
+            winOverlay =
+              if null brickPositions && lives > 0
+                then color green (rectangleSolid 100 100)
+                else mempty,
+            lastLine = line [(-11, -11), (11, -11)],
+            paddleLine = line [(paddlePos - 2, -10), (paddlePos + 2, -10)],
+            ball = translate (fst ballPos) (snd ballPos) (circle 1),
+            bricks = foldMap (\pos -> createSquare 1.8 pos (brickColor pos)) brickPositions,
+            scoreText = translate 5 17 (scale 0.01 0.01 (text ("Score: " ++ show score))),
+            difficultyText = translate 5 15 (scale 0.01 0.01 (text ("Difficulty: " ++ difficulty))),
+            livesText = translate 5 13 (scale 0.01 0.01 (text ("Lives: " ++ show lives)))
+          }
+   in scale scaleFactor scaleFactor $ combineRendering rendering
 
 brickColor :: Position -> Color
 brickColor pos
@@ -137,10 +156,13 @@ updateGame elapsedTime gameState@GameState {..} =
     Playing ->
       let updatedSlowDownDuration = max 0 (slowDownDuration - elapsedTime)
 
-          updatedBoostDuration = if boostActive then boostDuration - elapsedTime else boostDuration
+          updatedBoostDuration =
+            if boostActive
+              then boostDuration - elapsedTime
+              else boostDuration
           isBoostActive = updatedBoostDuration > 0
 
-          (newBallPos, newBallVel, newLives, newMode) =
+          ((newBallX, newBallY), (speedX, speedY), lives, mode) =
             case () of
               _
                 | snd ballPos < -20 && lives > 1 ->
@@ -149,37 +171,73 @@ updateGame elapsedTime gameState@GameState {..} =
                 | snd ballPos < -20 ->
                     ((0, -20), (0, 0), 0, EndScreen)
               _ ->
-                let speedMultiplier = getSpeed difficulty * (if isBoostActive then 2 else 1.0) * (if updatedSlowDownDuration > 0 then 0.5 else 1.0)
-                    newBallX = fst ballPos + fst ballVel * elapsedTime * speedMultiplier
-                    newBallY = snd ballPos + snd ballVel * elapsedTime * speedMultiplier
+                let mult1 = if isBoostActive then 2 else 1.0
+                    mult2 = if updatedSlowDownDuration > 0 then 0.5 else 1.0
+                    speedMultiplier = getSpeed difficulty * mult1 * mult2
+                    (ballX, ballY) = ballPos
+                    (velX, velY) = ballVel
+                    newBallX = ballX + velX * elapsedTime * speedMultiplier
+                    newBallY = ballY + velY * elapsedTime * speedMultiplier
                  in ((newBallX, newBallY), ballVel, lives, Playing)
+          ballPos = (newBallX, newBallY)
+          -- Use pattern matching for brick positions
+          updatedBricks =
+            filter
+              ( \(brickX, brickY) ->
+                  brickX > newBallX
+                    || brickX + 2 < newBallX
+                    || brickY > newBallY
+                    || brickY + 2 < newBallY
+              )
+              brickPositions
 
-          updatedBricks = filter (\(brickX, brickY) -> brickX > fst newBallPos || brickX + 2 < fst newBallPos || brickY > snd newBallPos || brickY + 2 < snd newBallPos) brickPositions
+          score =
+            if brickPositions /= updatedBricks
+              then score + 1
+              else score
 
-          newScore = if brickPositions /= updatedBricks then score + 1 else score
-          newBoostActive = any (\(brickX, brickY) -> brickX <= fst newBallPos && fst newBallPos <= brickX + 2 && brickY <= snd newBallPos && snd newBallPos <= brickY + 2) (filter isGreenBrick brickPositions)
+          -- Use pattern matching for green brick collision
+          bo =
+            any
+              ( \(brickX, brickY) ->
+                  brickX <= newBallX
+                    && newBallX <= brickX + 2
+                    && brickY <= newBallY
+                    && newBallY <= brickY + 2
+              )
+              (filter isGreenBrick brickPositions)
 
-          finalBoostDuration = if newBoostActive then 3.0 else updatedBoostDuration
-          newSlowDownDuration = if newBoostActive then 3.0 else updatedSlowDownDuration
+          boostDuration =
+            if boostActive
+              then 3.0
+              else updatedBoostDuration
+          slowDownDuration =
+            if boostActive
+              then 3.0
+              else updatedSlowDownDuration
 
-          (newVelX, newVelY)
-            | snd newBallPos < -10 && snd newBallPos > -11 && fst newBallPos > paddlePos - 2 && fst newBallPos < paddlePos + 2 =
-                ((fst newBallPos - paddlePos) * 10, abs (snd newBallVel))
-            | fst newBallPos < -10 || fst newBallPos > 10 =
-                (-abs (fst newBallVel) * signum (fst newBallPos), snd newBallVel)
-            | snd newBallPos > 10 || brickPositions /= updatedBricks =
-                (fst newBallVel, -abs (snd newBallVel))
-            | otherwise = (fst newBallVel, snd newBallVel)
+          -- Use pattern matching for velocity updates
+          ballVel
+            | newBallY < -10
+                && newBallY > -11
+                && newBallX > paddlePos - 2
+                && newBallX < paddlePos + 2 =
+                ((newBallX - paddlePos) * 10, abs speedY)
+            | newBallX < -10 || newBallX > 10 =
+                (-abs speedX * signum newBallX, speedY)
+            | newBallY > 10 || brickPositions /= updatedBricks =
+                (speedX, -abs speedY)
+            | otherwise = (speedX, speedY)
        in gameState
-            { ballPos = newBallPos,
-              ballVel = (newVelX, newVelY),
+            { ballPos,
+              ballVel,
               brickPositions = updatedBricks,
-              score = newScore,
-              lives = newLives,
-              mode = newMode,
-              boostActive = newBoostActive,
-              boostDuration = finalBoostDuration,
-              slowDownDuration = newSlowDownDuration
+              score,
+              lives,
+              mode,
+              boostActive,
+              boostDuration,
+              slowDownDuration
             }
     StartScreen -> gameState
     EndScreen -> gameState
